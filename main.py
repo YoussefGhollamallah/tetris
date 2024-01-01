@@ -1,219 +1,235 @@
 import pygame
+from shapes import shapes, colors
 import random
+import os
 
-colors = [
-    (0, 0, 0),
-    (120, 37, 179),
-    (100, 179, 179),
-    (80, 34, 22),
-    (80, 134, 22),
-    (180, 34, 22),
-    (180, 34, 122),
-]
+pygame.init()
+#taille grille
+width = 300
+height = 600
+block = 30  # 600//30 -> 20 300 // 30 -> 10  # la dimension des blocks
+#taille fenetre
+screen_w = 600 
+screen_h = 650
+black = (0, 0, 0) # le blackground
 
+tlx = 50
+tly = 50
 
-class Figure:
-    x = 0
-    y = 0
-
-    figures = [
-        [[1, 5, 9, 13], [4, 5, 6, 7]],
-        [[4, 5, 9, 10], [2, 6, 5, 9]],
-        [[6, 7, 9, 10], [1, 5, 6, 10]],
-        [[1, 2, 5, 9], [0, 4, 5, 6], [1, 5, 9, 8], [4, 5, 6, 10]],
-        [[1, 2, 6, 10], [5, 6, 7, 9], [2, 6, 10, 11], [3, 5, 6, 7]],
-        [[1, 4, 5, 6], [1, 4, 5, 9], [4, 5, 6, 9], [1, 5, 6, 9]],
-        [[1, 2, 5, 6]],
-    ]
-
-    def __init__(self, x, y):
+class Piece:
+    def __init__(self, x, y, shape):
         self.x = x
         self.y = y
-        self.type = random.randint(0, len(self.figures) - 1)
-        self.color = random.randint(1, len(colors) - 1)
-        self.rotation = 0
+        self.shape = shape#les piece de jeu 
+        self.color = colors[shapes.index(shape)]
+        self.rotate = 0
+        
 
-    def image(self):
-        return self.figures[self.type][self.rotation]
+def valide(shape, grille):
+    accept = [[(j, i) for j in range (10)if grille[i][j] == black] for i in range (20)]
+    accept = [i for sub in accept for i in sub]
 
-    def rotate(self):
-        self.rotation = (self.rotation + 1) % len(self.figures[self.type])
+    piece = convert(shape)
 
+    for pos in piece:
+        if pos not in accept:
+            if pos[1] > -1:
+                return False
+    return True
 
-class Tetris:
-    def __init__(self, height, width):
-        self.level = 2
-        self.score = 0
-        self.state = "start"
-        self.field = []
-        self.height = 0
-        self.width = 0
-        self.x = 100
-        self.y = 60
-        self.zoom = 20
-        self.figure = None
+def show_score(screen, score, best):
+    font = pygame.font.SysFont('arial', 30)
+    label = font.render(f'Score : {score*10}', 1, (255, 255, 255))
+    label2 = font.render(f'Best Score : {best * 10}', 1, (255, 255, 255))
+    x = tlx + width + 50
+    y = tly + height // 4 + 100
+    screen.blit(label, (x, y))
+    screen.blit(label2, (x, y - 100))
     
-        self.height = height
-        self.width = width
-        self.field = []
-        self.score = 0
-        self.state = "start"
-        for i in range(height):
-            new_line = []
-            for j in range(width):
-                new_line.append(0)
-            self.field.append(new_line)
+def lire_best_score():
+    if os.path.exists("score.txt"):
+        with open("score.txt", "r") as fichier:
+            try:
+                best_score = int(fichier.read())
+            except ValueError:
+                best_score = 0
+    else:
+        best_score = 0
+    return best_score
 
-    def new_figure(self):
-        self.figure = Figure(3, 0)
-
-    def intersects(self):
-        intersection = False
-        for i in range(4):
-            for j in range(4):
-                if i * 4 + j in self.figure.image():
-                    if i + self.figure.y > self.height - 1 or \
-                            j + self.figure.x > self.width - 1 or \
-                            j + self.figure.x < 0 or \
-                            self.field[i + self.figure.y][j + self.figure.x] > 0:
-                        intersection = True
-        return intersection
-
-    def break_lines(self):
-        lines = 0
-        for i in range(1, self.height):
-            zeros = 0
-            for j in range(self.width):
-                if self.field[i][j] == 0:
-                    zeros += 1
-            if zeros == 0:
-                lines += 1
-                for i1 in range(i, 1, -1):
-                    for j in range(self.width):
-                        self.field[i1][j] = self.field[i1 - 1][j]
-        self.score += lines ** 2
-
-    def go_space(self):
-        while not self.intersects():
-            self.figure.y += 1
-        self.figure.y -= 1
-        self.freeze()
-
-    def go_down(self):
-        self.figure.y += 1
-        if self.intersects():
-            self.figure.y -= 1
-            self.freeze()
-
-    def freeze(self):
-        for i in range(4):
-            for j in range(4):
-                if i * 4 + j in self.figure.image():
-                    self.field[i + self.figure.y][j + self.figure.x] = self.figure.color
-        self.break_lines()
-        self.new_figure()
-        if self.intersects():
-            self.state = "gameover"
-
-    def go_side(self, dx):
-        old_x = self.figure.x
-        self.figure.x += dx
-        if self.intersects():
-            self.figure.x = old_x
-
-    def rotate(self):
-        old_rotation = self.figure.rotation
-        self.figure.rotate()
-        if self.intersects():
-            self.figure.rotation = old_rotation
+def enregistrer_best_score(best_score):
+    with open("score.txt", "w") as fichier:
+        fichier.write(str(best_score))
+        
+        best_score = lire_best_score()
 
 
-# Initialize the game engine
-pygame.init()
+def convert(shape): #convertir piece
+    pos = []
+    piece = shape.shape[shape.rotate % len(shape.shape)]
+    for i, line in enumerate(piece):
+        for j, case in enumerate(line):
+            if case == '0':
+                pos.append((shape.x+j, shape.y+i))
+                
+    return pos
 
-# Define some colors
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-GRAY = (128, 128, 128)
+
+def cree_grille(static): # def pour créer les variable I et J pour creer la grille et choisir la couleur des cases
+    grille = [[black for _ in range(10)] for _ in range(20)]
+    for i in range (len(grille)):
+        for j in range(len(grille[i])):
+            if (j, i) in static:
+                grille[i] [j] = static[(j, i)]
+                
+    return grille
 
 
-size = (400, 500)
-screen = pygame.display.set_mode(size)
+def draw_grille(screen, grille): # grille du plateau de jeu
+    for i in range(len(grille)):
+        pygame.draw.line(screen, (255, 255, 255), (tlx, tly+i*block), (tlx + width, tly +i*block)) #ligne x
+        for j in range(len(grille[i])):
+            pygame.draw.line(screen, (255, 255, 255), (tlx + j*block, tly), (tlx + j*block, tly + height)) #ligne y
+        pygame.draw.rect(screen, (0, 255, 0), (tlx, tly, width, height), 4) #bordure de la grille de jeu 
+        
+            
+# dessiner la fenetre
+def draw_windows(screen, grille):
+    screen.fill(black)
+    for i in range(len(grille)):   
+        for j in range(len(grille[i])):
+            pygame.draw.rect(screen, grille[i][j], (tlx + j*block, tly + i*block, block, block), 0)
+    draw_grille(screen, grille)  
 
-pygame.display.set_caption("Tetris")
 
-# Loop until the user clicks the close button.
-done = False
-clock = pygame.time.Clock()
-fps = 25
-game = Tetris(20, 10)
-counter = 0
+def draw_next(screen, shape):
+    font = pygame.font.SysFont('arial', 25)
+    label = font.render('Next Piece', 1, (255, 255, 255))
+    x = tlx + width + 50
+    y = tly + height // 2 + 100
+    piece = shape.shape[shape.rotate % len(shape.shape)]
+    for i, line in enumerate(piece):
+        for j, case in enumerate(line):
+            if case == '0':
+                pygame.draw.rect(screen, shape.color, (x + (1 +j) * block, y + (1 + i) * block, block, block), 0)
+    screen.blit(label, (x + 5, y - 30))
+    
+def play_sound(sound):
+    music = pygame.mixer.Sound(sound)
+    music.play(-1)
+    
 
-pressing_down = False
+    
+def get_piece():
+    return Piece(4, 0, random.choice(shapes)) #placer les pieces au coordonnées 4, 0
 
-while not done:
-    if game.figure is None:
-        game.new_figure()
-    counter += 1
-    if counter > 100000:
-        counter = 0
+def check_row(grille, static): #verifier si ils sont en ligne ou  pas
+    inc = 0
+    for i in range(len(grille)-1, -1, -1):
+        if black not in grille[i]: #verifier si la ligne n'est plus noir
+            inc += 1
+            ind = i
+            for j in range(len(grille[i])):
+                try:
+                    del static[(j, i)] #supprimer la ligne pleine
+                except:
+                    continue
+    if inc > 0:
+        for key in sorted(list(static), key=lambda x: x[1])[::-1]:
+            x, y = key
+            if y < ind:
+                new_key = (x, y + inc)
+                static[new_key] = static.pop(key)
+    return inc
+ 
 
-    if counter % (fps // game.level // 2) == 0 or pressing_down:
-        if game.state == "start":
-            game.go_down()
+def lost(static):
+    for pos in static:
+        x, y = pos
+        if y < 1:
+            return True
+    return False
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            done = True
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_UP:
-                game.rotate()
-            if event.key == pygame.K_DOWN:
-                pressing_down = True
-            if event.key == pygame.K_LEFT:
-                game.go_side(-1)
-            if event.key == pygame.K_RIGHT:
-                game.go_side(1)
-            if event.key == pygame.K_SPACE:
-                game.go_space()
-            if event.key == pygame.K_ESCAPE:
-                game.__init__(20, 10)
+def main(screen):
+    static = {}
+    change = False
+    run = True
+    grille = cree_grille(static)
+    current = get_piece()
+    next_piece = get_piece()
+    
+    clock = pygame.time.Clock()
+    time = 0
+    speed = 0.30
+    score = 0
+    
+    while run:
+        with open('score.txt', 'r') as file:
+            best_score = int(file.read())
+            
+        grille = cree_grille(static)
+        clock.tick()
+        time += clock.get_rawtime()
+        
+        if time / 1000 > speed:
+            time = 0
+            current.y += 1
+            if not valide(current, grille):
+                current.y -= 1
+                change = True
+            score += check_row(grille, static)
+                
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                run = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_LEFT:
+                    current.x -= 1
+                    if not valide(current, grille):
+                        current.x += 1
+                if event.key == pygame.K_RIGHT:
+                    current.x += 1
+                    if not valide(current, grille):
+                        current.x -= 1
+                if event.key == pygame.K_UP:
+                    current.rotate += 1
+                    if not valide(current, grille):
+                        current.rotate -= 1
+                if event.key == pygame.K_DOWN:
+                    current.y += 1
+                    if not valide(current, grille):
+                        current.y -= 1
 
-    if event.type == pygame.KEYUP:
-            if event.key == pygame.K_DOWN:
-                pressing_down = False
+                    
 
-    screen.fill(WHITE)
+        shape_pos = convert(current)
+        for i in shape_pos:
+            x, y = i
+            if y > -1:
+                grille[y][x] = current.color
 
-    for i in range(game.height):
-        for j in range(game.width):
-            pygame.draw.rect(screen, GRAY, [game.x + game.zoom * j, game.y + game.zoom * i, game.zoom, game.zoom], 1)
-            if game.field[i][j] > 0:
-                pygame.draw.rect(screen, colors[game.field[i][j]],
-                                 [game.x + game.zoom * j + 1, game.y + game.zoom * i + 1, game.zoom - 2, game.zoom - 1])
+        if change:
+            for pos in shape_pos:
+                static[pos] = current.color
+            current = next_piece
+            next_piece = get_piece()
+            change = False
 
-    if game.figure is not None:
-        for i in range(4):
-            for j in range(4):
-                p = i * 4 + j
-                if p in game.figure.image():
-                    pygame.draw.rect(screen, colors[game.figure.color],
-                                     [game.x + game.zoom * (j + game.figure.x) + 1,
-                                      game.y + game.zoom * (i + game.figure.y) + 1,
-                                      game.zoom - 2, game.zoom - 2])
+        
+                    
+        draw_windows(screen, grille)
+        draw_next(screen, next_piece)
+        show_score(screen, score, best_score)
+        pygame.display.flip()
+        if lost(static):
+            run = False
+        if score > best_score:
+            best_score = score
+            enregistrer_best_score(best_score)  # Enregistre le meilleur score
+        elif score < best_score:
+            enregistrer_best_score(best_score)  # Ne modifie le fichier que si le score actuel est supérieur
+        play_sound('Tetris.wav')
 
-    font = pygame.font.SysFont('Calibri', 25, True, False)
-    font1 = pygame.font.SysFont('Calibri', 65, True, False)
-    text = font.render("Score: " + str(game.score), True, BLACK)
-    text_game_over = font1.render("Game Over", True, (255, 125, 0))
-    text_game_over1 = font1.render("Appuie sur ESC", True, (255, 215, 0))
-
-    screen.blit(text, [0, 0])
-    if game.state == "gameover":
-        screen.blit(text_game_over, [20, 200])
-        screen.blit(text_game_over1, [25, 265])
-
-    pygame.display.flip()
-    clock.tick(fps)
-
-pygame.quit()
+screen = pygame.display.set_mode((screen_w, screen_h))    
+main(screen)
+pygame.quit()       
